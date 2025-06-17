@@ -4,8 +4,6 @@
 
 Un **buffer circular** o *ring buffer* es una estructura de datos en forma de cola circular, útil para almacenar datos de manera temporal, como en la recepción UART. Su ventaja es el aprovechamiento eficiente de memoria sin necesidad de mover datos.
 
-![Circular_Buffer_Animation](assets/Circular_Buffer_Animation.gif)
-
 ---
 
 ## Componentes Clave
@@ -94,18 +92,7 @@ void ring_buffer_flush(ring_buffer_t *rb)
 
 ## Ejemplo Conceptual de Uso
 
-1. Agregue el archivo fuente al CMakeLists.txt
-
-```CMake
-# Add sources to executable
-target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
-    Core/Src/led_driver.c
-    Core/Src/ring_buffer.c
-)
-```
-
-2. Agregue el codigo en los bloques indicados en `main.c`:
+Agregue el codigo en los bloques indicados en `main.c`:
 
 ```c
 /* USER CODE BEGIN Includes */
@@ -155,9 +142,5 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 ```
 
 ---
-
-## Ejercicio
-
-Implemente las funciones de ring_buffer.c y pruebe su funcionalidad usando la consola de PC con el USART2.
 
 **Siguiente Paso:** [Implementación de una librería para el teclado (KEYPAD.md)](KEYPAD.md)
