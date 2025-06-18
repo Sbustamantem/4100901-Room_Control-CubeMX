@@ -50,7 +50,7 @@
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-uint8_t PSWD_buffer[PSWD_LEN + 1] = {0}; // Buffer to store the last 4 keys pressed
+uint8_t PSWD_buffer[PSWD_LEN + 1] = {0}; // Buffer to store the password keys pressed
 uint8_t remaining_chrs = 0; // Variable to track the number of keys pressed
 #define UART2_RX_LEN 16
 uint8_t uart2_rx_buffer[UART2_RX_LEN];
@@ -87,8 +87,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
     }
 }
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    // Check if the button pressed is the one defined for B1_Pin
+    // If the button is pressed, put remaining_chrs to PSWD_LEN and reset the PSWD_buffer
     if (GPIO_Pin == B1_Pin) {
-        remaining_chrs = 4; // Reset the number of remaining characters to 4
+        remaining_chrs = PSWD_LEN; // Reset the number of remaining characters to password length
         memset(PSWD_buffer, 0, sizeof(PSWD_buffer)); //set the buffer to zero
         HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET); // Turn off LED
         printf("Botón presionado. Ingrese la contraseña de 4 dígitos...\r\n");
@@ -148,13 +150,11 @@ printf("Sistema listo. Esperando pulsaciones del teclado...\r\n");
     if (ring_buffer_read(&keypad_rb, &key_from_buffer)) {
         if (key_from_buffer != '\0') {
         if(remaining_chrs) {
-            PSWD_buffer[PSWD_LEN - remaining_chrs] = key_from_buffer; // Store the key in the buffer
-          
+            PSWD_buffer[PSWD_LEN - remaining_chrs] = key_from_buffer; // Store the character in the buffer
             remaining_chrs--; // Decrease the number of remaining characters
             if (!remaining_chrs) {
                 PSWD_buffer[PSWD_LEN] = '\0'; // Null-terminate the string
                 printf("Contraseña ingresada: %s\r\n", PSWD_buffer);
-                
                 // Check if the entered password matches the predefined password
                 if (strcmp((char *)PSWD_buffer, PASSWORD) == 0) {
                     printf("Contraseña correcta. Acceso concedido.\r\n");
