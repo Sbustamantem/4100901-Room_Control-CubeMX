@@ -12,7 +12,7 @@ static const char keypad_map[KEYPAD_ROWS][KEYPAD_COLS] = {
 
 void keypad_init(keypad_handle_t* keypad) {
   for (int i = 0; i < KEYPAD_ROWS; i++) {
-    HAL_GPIO_WritePin(keypad->row_ports[i], keypad->row_pins[i], GPIO_PIN_SET);
+    HAL_GPIO_WritePin(keypad->row_ports[i], keypad->row_pins[i], GPIO_PIN_RESET);
   }
 }
 
@@ -23,6 +23,7 @@ void keypad_init(keypad_handle_t* keypad) {
  * @retval The character corresponding to the pressed key, or '\0' if no key is pressed
  */
 char keypad_scan(keypad_handle_t* keypad, uint16_t col_pin) {
+    char key_pressed = '\0';
     int col_index = -1;
     for (int i = 0; i < KEYPAD_COLS; i++) {
         if (keypad->col_pins[i] == col_pin) {
@@ -30,7 +31,15 @@ char keypad_scan(keypad_handle_t* keypad, uint16_t col_pin) {
             break;
         }
     }
-    char key_pressed = '\0';
+    if (col_index == -1) {
+        return '\0'; // Not a valid column pin
+    }
+  HAL_Delay(5); // Short delay to stabilize the signal
+    // Set all rows to HIGH
+    for (int i = 0; i < KEYPAD_ROWS; i++) {
+        HAL_GPIO_WritePin(keypad->row_ports[i], keypad->row_pins[i], GPIO_PIN_SET);
+    }
+    // Now iterate the current row pin to LOW
     for (int i = 0; i < KEYPAD_ROWS; i++) {
         // Set the current row pin low
         HAL_GPIO_WritePin(keypad->row_ports[i], keypad->row_pins[i], GPIO_PIN_RESET);

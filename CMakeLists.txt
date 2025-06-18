@@ -49,6 +49,7 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Src/ring_buffer.c
     Src/keypad_driver.c
+    Src/led_driver.c
     # Add user sources here
 )
 

@@ -24,6 +24,7 @@
 #include "ring_buffer.h"
 #include "stm32l4xx_hal.h"
 #include "keypad_driver.h"
+#include "led_driver.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -37,6 +38,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PASSWORD "1234" // Define the password to be checked
+#define PSWD_LEN 4 // Length of the password
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -48,8 +50,8 @@
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-uint8_t min_buffer[4] = {0}; // Buffer to store the last 4 keys pressed
-uint8_t p = 0; // Variable to track the number of keys pressed
+uint8_t PSWD_buffer[PSWD_LEN + 1] = {0}; // Buffer to store the last 4 keys pressed
+uint8_t remaining_chrs = 0; // Variable to track the number of keys pressed
 #define UART2_RX_LEN 16
 uint8_t uart2_rx_buffer[UART2_RX_LEN];
 ring_buffer_t uart2_rx_rb;
@@ -60,6 +62,7 @@ keypad_handle_t keypad = {
     .col_ports = {KEYPAD_C1_GPIO_Port, KEYPAD_C2_GPIO_Port, KEYPAD_C3_GPIO_Port, KEYPAD_C4_GPIO_Port},
     .col_pins  = {KEYPAD_C1_Pin, KEYPAD_C2_Pin, KEYPAD_C3_Pin, KEYPAD_C4_Pin}
 };
+led_handle_t PSWD_LED = { .port = LD2_GPIO_Port, .pin = LD2_Pin }; // LED to indicate password status  
 
 #define KEYPAD_BUFFER_LEN 16
 uint8_t keypad_buffer[KEYPAD_BUFFER_LEN];
@@ -85,10 +88,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 }
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     if (GPIO_Pin == B1_Pin) {
-        p = 1;
-        memset(min_buffer, 0, sizeof(min_buffer)); //set the buffer to zero
+        remaining_chrs = 4; // Reset the number of remaining characters to 4
+        memset(PSWD_buffer, 0, sizeof(PSWD_buffer)); //set the buffer to zero
         HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET); // Turn off LED
-
+        printf("Botón presionado. Ingrese la contraseña de 4 dígitos...\r\n");
+        led_off(&PSWD_LED); // Turn off the LED
     } 
     else {
         char key = keypad_scan(&keypad, GPIO_Pin);
@@ -140,29 +144,36 @@ printf("Sistema listo. Esperando pulsaciones del teclado...\r\n");
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-    uint8_t key_from_buffer;
+    uint8_t key_from_buffer; // Initialize to null character
     if (ring_buffer_read(&keypad_rb, &key_from_buffer)) {
         if (key_from_buffer != '\0') {
-          if (p) {
-            min_buffer[4-p] = key_from_buffer;
-            p--; // Decrement p after reading a key
-            if (p == 0) {
-               if ( memcmp(min_buffer, PASSWORD, 4) == 0) {
-              HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); // Turn on LED if password matches
-            } else {
-              HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET); // Turn off LED if password does not match
-              HAL_Delay(1000); // Keep LED on for 1 second
-              HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET); // Turn off LED
+        if(remaining_chrs) {
+            PSWD_buffer[PSWD_LEN - remaining_chrs] = key_from_buffer; // Store the key in the buffer
+          
+            remaining_chrs--; // Decrease the number of remaining characters
+            if (!remaining_chrs) {
+                PSWD_buffer[PSWD_LEN] = '\0'; // Null-terminate the string
+                printf("Contraseña ingresada: %s\r\n", PSWD_buffer);
+                
+                // Check if the entered password matches the predefined password
+                if (strcmp((char *)PSWD_buffer, PASSWORD) == 0) {
+                    printf("Contraseña correcta. Acceso concedido.\r\n");
+                    led_on(&PSWD_LED); // Turn on the LED to indicate success
+                } else {
+                    printf("Contraseña incorrecta. Inténtalo de nuevo.\r\n");
+                    led_on(&PSWD_LED); // Turn on the LED briefly to indicate failure
+                    HAL_Delay(1000); // Keep the LED on for 1 second
+                    led_off(&PSWD_LED); // Turn off the LED to indicate failure
+                }
             }
-            memset(min_buffer, 0, sizeof(min_buffer)); // Reset the buffer after checking
-            }
-           
         }
         printf("Tecla presionada: %c\r\n", (char)key_from_buffer);
+        ring_buffer_flush(&keypad_rb); // Reset the key variable
         }
-    } else {
+    } else if (!remaining_chrs) {
         printf("No hay teclas presionadas.\r\n");
     }
+    HAL_Delay(1000); // Delay to avoid flooding the console with messages
 
     /* USER CODE END WHILE */
 
@@ -325,10 +336,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(KEYPAD_R3_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -337,7 +348,12 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+// This function is used to redirect printf to the UART
+int _write(int file, char *ptr, int len)
+{
+    HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
+    return len;
+}
 /* USER CODE END 4 */
 
 /**
